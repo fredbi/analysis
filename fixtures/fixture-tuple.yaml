@@ -1,0 +1,150 @@
+swagger: '2.0'
+
+info:
+  version: "1.0.0"
+  title: fixture for enums with additional 
+  description: |
+    A test of enum validation generation for tuples and additionalItems.
+    Derived from fixtures/codegen/todolist.enum.yml
+produces:
+  - application/json
+consumes:
+  - application/json
+paths:
+  /models:
+    get:
+      operationId: modelOp
+      summary: many model variations
+      description: Used to see if a codegen can render all the possible enum categories
+      tags:
+        - testcgen
+      responses:
+        default:
+          description: Generic Out
+definitions:
+  Comics:
+    type: array
+    items:
+      # check if x-go-name works here: yes it does
+      - x-go-name: basicDescription 
+        type: object
+        properties:
+          character:
+            type: string
+            enum: [ "mickey" , "batman", "tintin", "spirou"]        # enum on property
+          author:
+            type: string
+            enum: [ "Disney", "Miller", "Hergé", "Franquin" ]
+        enum: # enum on object
+          - 
+            character: mickey
+            author: Disney
+          - 
+            character: batman
+            author: Miller
+          - 
+            character: tintin
+            author: Hergé
+          - 
+            character: spirou
+            author: Franquin
+      - type: array
+        items: 
+          type: string
+          format: isbn
+          enum: 
+            - '1234456577767-01'
+            - '1234456577767-02'
+            - '1234456577767-03'
+        enum:
+          -
+            - '1234456577767-01'
+            - '1234456577767-02'
+            - '1234456577767-03'
+          -
+            - '1234456577767-02'
+            - '1234456577767-03'
+            - '1234456577767-01'
+  Classics:
+    type: array
+    items:
+      - type: string 
+        format: isbn
+        enum: 
+          - '9234456577767-01'
+          - '9234456577767-02'
+          - '9234456577767-03'
+      - $ref: '#/definitions/Comics'
+    additionalItems:
+      # the additionalItems type is renamed
+      x-go-name: extendedDefinition
+      type: array
+      items:
+        # This one is renamed after the parent's new go-name
+        - type: object
+          properties:
+            title:
+              type: string
+              enum: [ 'Les Misérables', 'Bleak House', 'Sherlock Holmes', 'Siddhartha' ]
+            period:
+              type: string
+              # master does not support formats yet
+              #format: date
+              enum:
+              - 2000-01-01
+              - 1900-01-01
+              - 1800-01-01
+              - 1700-01-01
+              - 1600-01-01
+          enum:
+          - title: Les Misérables
+            period: 1900-01-01
+          - title: Bleak House
+        # This cannot not renamed: it a slice of primitive
+        - type: array
+          items:
+            type: string
+            # master does not support formats yet
+            #format: date
+            enum:
+            - 2000-02-01
+            - 1900-02-01
+            - 1800-02-01
+            - 1700-02-01
+            - 1600-02-01
+          enum:
+          -
+            - 2000-02-01
+            - 1900-02-01
+          -
+            - 1600-02-01
+            - 1700-02-01
+        # This one is renamed after the parent's new go-name
+        - type: object
+          properties:
+            origin: 
+              type: string
+              enum: [ print, e-book, collection, museum ]
+            # no yet supported
+          additionalProperties:
+            type: string
+            enum: [ bookshop, amazon, library ]
+        - x-go-name: additionalStuff 
+          type: object
+          properties:
+            moreStuff: 
+              type: string
+              enum: [ genre, ratings, age, online ]
+            # no yet supported
+          additionalProperties:
+            type: object
+            properties:
+              stuffCategory:
+                type: string
+              stuffValue:
+                type: string
+        # This one should remained named Comics
+        - $ref: '#/definitions/Comics'
+
+
+

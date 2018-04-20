@@ -120,6 +120,452 @@ func TestFlatten_ImportExternalReferences(t *testing.T) {
 			default:
 				require.Fail(t, "unknown type", "got %T", vv)
 			}
+<<<<<<< HEAD
+=======
+		}
+	}
+}
+
+func TestImportExternalReferences(t *testing.T) {
+	bp := filepath.Join(".", "fixtures", "external_definitions.yml")
+	sp, err := loadSpec(bp)
+	if assert.NoError(t, err) {
+
+		values := []struct {
+			Key string
+			Ref spec.Ref
+		}{
+			{"#/parameters/someParam/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/parameters/1/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/get/parameters/2/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/responses/someResponse/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/get/responses/default/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/get/responses/200/schema", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/namedAgain", spec.MustCreateRef("#/definitions/named")},
+			{"#/definitions/datedTag/allOf/1", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/datedRecords/items/1", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/datedTaggedRecords/items/1", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/datedTaggedRecords/additionalItems", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/otherRecords/items", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/tags/additionalProperties", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/namedThing/properties/name", spec.MustCreateRef("#/definitions/named")},
+		}
+		for _, v := range values {
+			// technically not necessary to run for each value, but if things go right
+			// this is idempotent, so having it repeat shouldn't matter
+			// this validates that behavior
+			err := importExternalReferences(&FlattenOpts{
+				Spec:     New(sp),
+				BasePath: bp,
+			})
+
+			if assert.NoError(t, err) {
+
+				ptr, err := jsonpointer.New(v.Key[1:])
+				if assert.NoError(t, err) {
+					vv, _, err := ptr.Get(sp)
+
+					if assert.NoError(t, err) {
+						switch tv := vv.(type) {
+						case *spec.Schema:
+							assert.Equal(t, v.Ref.String(), tv.Ref.String(), "for %s", v.Key)
+						case spec.Schema:
+							assert.Equal(t, v.Ref.String(), tv.Ref.String(), "for %s", v.Key)
+						case *spec.SchemaOrBool:
+							assert.Equal(t, v.Ref.String(), tv.Schema.Ref.String(), "for %s", v.Key)
+						case *spec.SchemaOrArray:
+							assert.Equal(t, v.Ref.String(), tv.Schema.Ref.String(), "for %s", v.Key)
+						default:
+							assert.Fail(t, "unknown type", "got %T", vv)
+						}
+					}
+				}
+			}
+		}
+		assert.Len(t, sp.Definitions, 11)
+		assert.Contains(t, sp.Definitions, "tag")
+		assert.Contains(t, sp.Definitions, "named")
+		assert.Contains(t, sp.Definitions, "record")
+	}
+}
+
+func TestRewriteSchemaRef(t *testing.T) {
+	bp := filepath.Join("fixtures", "inline_schemas.yml")
+	sp, err := loadSpec(bp)
+	if assert.NoError(t, err) {
+
+		values := []struct {
+			Key string
+			Ref spec.Ref
+		}{
+			{"#/parameters/someParam/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/parameters/1/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/get/parameters/2/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/responses/someResponse/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/get/responses/default/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/paths/~1some~1where~1{id}/get/responses/200/schema", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/namedAgain", spec.MustCreateRef("#/definitions/named")},
+			{"#/definitions/datedTag/allOf/1", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/datedRecords/items/1", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/datedTaggedRecords/items/1", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/datedTaggedRecords/additionalItems", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/otherRecords/items", spec.MustCreateRef("#/definitions/record")},
+			{"#/definitions/tags/additionalProperties", spec.MustCreateRef("#/definitions/tag")},
+			{"#/definitions/namedThing/properties/name", spec.MustCreateRef("#/definitions/named")},
+		}
+
+		for i, v := range values {
+			err := rewriteSchemaToRef(sp, v.Key, v.Ref)
+			if assert.NoError(t, err) {
+				ptr, err := jsonpointer.New(v.Key[1:])
+				if assert.NoError(t, err) {
+					vv, _, err := ptr.Get(sp)
+
+					if assert.NoError(t, err) {
+						switch tv := vv.(type) {
+						case *spec.Schema:
+							assert.Equal(t, v.Ref.String(), tv.Ref.String(), "at %d for %s", i, v.Key)
+						case spec.Schema:
+							assert.Equal(t, v.Ref.String(), tv.Ref.String(), "at %d for %s", i, v.Key)
+						case *spec.SchemaOrBool:
+							assert.Equal(t, v.Ref.String(), tv.Schema.Ref.String(), "at %d for %s", i, v.Key)
+						case *spec.SchemaOrArray:
+							assert.Equal(t, v.Ref.String(), tv.Schema.Ref.String(), "at %d for %s", i, v.Key)
+						default:
+							assert.Fail(t, "unknown type", "got %T", vv)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestSplitKey(t *testing.T) {
+
+	type KeyFlag uint64
+
+	const (
+		isOperation KeyFlag = 1 << iota
+		isDefinition
+		isSharedOperationParam
+		isOperationParam
+		isOperationResponse
+		isDefaultResponse
+		isStatusCodeResponse
+	)
+
+	values := []struct {
+		Key         string
+		Flags       KeyFlag
+		PathItemRef spec.Ref
+		PathRef     spec.Ref
+		Name        string
+	}{
+		{
+			"#/paths/~1some~1where~1{id}/parameters/1/schema",
+			isOperation | isSharedOperationParam,
+			spec.Ref{},
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}"),
+			"",
+		},
+		{
+			"#/paths/~1some~1where~1{id}/get/parameters/2/schema",
+			isOperation | isOperationParam,
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}/GET"),
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}"),
+			"",
+		},
+		{
+			"#/paths/~1some~1where~1{id}/get/responses/default/schema",
+			isOperation | isOperationResponse | isDefaultResponse,
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}/GET"),
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}"),
+			"Default",
+		},
+		{
+			"#/paths/~1some~1where~1{id}/get/responses/200/schema",
+			isOperation | isOperationResponse | isStatusCodeResponse,
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}/GET"),
+			spec.MustCreateRef("#/paths/~1some~1where~1{id}"),
+			"OK",
+		},
+		{
+			"#/definitions/namedAgain",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"namedAgain",
+		},
+		{
+			"#/definitions/datedRecords/items/1",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"datedRecords",
+		},
+		{
+			"#/definitions/datedRecords/items/1",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"datedRecords",
+		},
+		{
+			"#/definitions/datedTaggedRecords/items/1",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"datedTaggedRecords",
+		},
+		{
+			"#/definitions/datedTaggedRecords/additionalItems",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"datedTaggedRecords",
+		},
+		{
+			"#/definitions/otherRecords/items",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"otherRecords",
+		},
+		{
+			"#/definitions/tags/additionalProperties",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"tags",
+		},
+		{
+			"#/definitions/namedThing/properties/name",
+			isDefinition,
+			spec.Ref{},
+			spec.Ref{},
+			"namedThing",
+		},
+	}
+
+	for i, v := range values {
+		parts := keyParts(v.Key)
+		pref := parts.PathRef()
+		piref := parts.PathItemRef()
+		assert.Equal(t, v.PathRef.String(), pref.String(), "pathRef: %s at %d", v.Key, i)
+		assert.Equal(t, v.PathItemRef.String(), piref.String(), "pathItemRef: %s at %d", v.Key, i)
+
+		if v.Flags&isOperation != 0 {
+			assert.True(t, parts.IsOperation(), "isOperation: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsOperation(), "isOperation: %s at %d", v.Key, i)
+		}
+		if v.Flags&isDefinition != 0 {
+			assert.True(t, parts.IsDefinition(), "isDefinition: %s at %d", v.Key, i)
+			assert.Equal(t, v.Name, parts.DefinitionName(), "definition name: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsDefinition(), "isDefinition: %s at %d", v.Key, i)
+			if v.Name != "" {
+				assert.Equal(t, v.Name, parts.ResponseName(), "response name: %s at %d", v.Key, i)
+			}
+		}
+		if v.Flags&isOperationParam != 0 {
+			assert.True(t, parts.IsOperationParam(), "isOperationParam: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsOperationParam(), "isOperationParam: %s at %d", v.Key, i)
+		}
+		if v.Flags&isSharedOperationParam != 0 {
+			assert.True(t, parts.IsSharedOperationParam(), "isSharedOperationParam: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsSharedOperationParam(), "isSharedOperationParam: %s at %d", v.Key, i)
+		}
+		if v.Flags&isOperationResponse != 0 {
+			assert.True(t, parts.IsOperationResponse(), "isOperationResponse: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsOperationResponse(), "isOperationResponse: %s at %d", v.Key, i)
+		}
+		if v.Flags&isDefaultResponse != 0 {
+			assert.True(t, parts.IsDefaultResponse(), "isDefaultResponse: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsDefaultResponse(), "isDefaultResponse: %s at %d", v.Key, i)
+		}
+		if v.Flags&isStatusCodeResponse != 0 {
+			assert.True(t, parts.IsStatusCodeResponse(), "isStatusCodeResponse: %s at %d", v.Key, i)
+		} else {
+			assert.False(t, parts.IsStatusCodeResponse(), "isStatusCodeResponse: %s at %d", v.Key, i)
+		}
+	}
+}
+
+func definitionPtr(key string) string {
+	if !strings.HasPrefix(key, "#/definitions") {
+		return key
+	}
+	return strings.Join(strings.Split(key, "/")[:3], "/")
+}
+
+func TestNamesFromKey(t *testing.T) {
+	bp := filepath.Join("fixtures", "inline_schemas.yml")
+	sp, err := loadSpec(bp)
+	if assert.NoError(t, err) {
+
+		values := []struct {
+			Key   string
+			Names []string
+		}{
+			{"#/paths/~1some~1where~1{id}/parameters/1/schema", []string{"GetSomeWhereID params body", "PostSomeWhereID params body"}},
+			{"#/paths/~1some~1where~1{id}/get/parameters/2/schema", []string{"GetSomeWhereID params body"}},
+			{"#/paths/~1some~1where~1{id}/get/responses/default/schema", []string{"GetSomeWhereID Default body"}},
+			{"#/paths/~1some~1where~1{id}/get/responses/200/schema", []string{"GetSomeWhereID OK body"}},
+			{"#/definitions/namedAgain", []string{"namedAgain"}},
+			{"#/definitions/datedTag/allOf/1", []string{"datedTag allOf 1"}},
+			{"#/definitions/datedRecords/items/1", []string{"datedRecords tuple 1"}},
+			{"#/definitions/datedTaggedRecords/items/1", []string{"datedTaggedRecords tuple 1"}},
+			{"#/definitions/datedTaggedRecords/additionalItems", []string{"datedTaggedRecords tuple additionalItems"}},
+			{"#/definitions/otherRecords/items", []string{"otherRecords items"}},
+			{"#/definitions/tags/additionalProperties", []string{"tags additionalProperties"}},
+			{"#/definitions/namedThing/properties/name", []string{"namedThing name"}},
+		}
+
+		for i, v := range values {
+			ptr, err := jsonpointer.New(definitionPtr(v.Key)[1:])
+			if assert.NoError(t, err) {
+				vv, _, err := ptr.Get(sp)
+				if assert.NoError(t, err) {
+					switch tv := vv.(type) {
+					case *spec.Schema:
+						aschema, err := Schema(SchemaOpts{Schema: tv, Root: sp, BasePath: bp})
+						if assert.NoError(t, err) {
+							names := namesFromKey(keyParts(v.Key), aschema, opRefsByRef(gatherOperations(New(sp), nil)))
+							assert.Equal(t, v.Names, names, "for %s at %d", v.Key, i)
+						}
+					case spec.Schema:
+						aschema, err := Schema(SchemaOpts{Schema: &tv, Root: sp, BasePath: bp})
+						if assert.NoError(t, err) {
+							names := namesFromKey(keyParts(v.Key), aschema, opRefsByRef(gatherOperations(New(sp), nil)))
+							assert.Equal(t, v.Names, names, "for %s at %d", v.Key, i)
+						}
+					default:
+						assert.Fail(t, "unknown type", "got %T", vv)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestDepthFirstSort(t *testing.T) {
+	bp := filepath.Join("fixtures", "inline_schemas.yml")
+	sp, err := loadSpec(bp)
+	values := []string{
+		"#/paths/~1some~1where~1{id}/parameters/1/schema/properties/createdAt",
+		"#/paths/~1some~1where~1{id}/parameters/1/schema",
+		"#/paths/~1some~1where~1{id}/get/parameters/2/schema/properties/createdAt",
+		"#/paths/~1some~1where~1{id}/get/parameters/2/schema",
+		"#/paths/~1some~1where~1{id}/get/responses/200/schema/properties/id",
+		"#/paths/~1some~1where~1{id}/get/responses/200/schema/properties/value",
+		"#/paths/~1some~1where~1{id}/get/responses/200/schema",
+		"#/paths/~1some~1where~1{id}/get/responses/404/schema",
+		"#/paths/~1some~1where~1{id}/get/responses/default/schema/properties/createdAt",
+		"#/paths/~1some~1where~1{id}/get/responses/default/schema",
+		"#/definitions/datedRecords/items/1/properties/createdAt",
+		"#/definitions/datedTaggedRecords/items/1/properties/createdAt",
+		"#/definitions/namedThing/properties/name/properties/id",
+		"#/definitions/records/items/0/properties/createdAt",
+		"#/definitions/datedTaggedRecords/additionalItems/properties/id",
+		"#/definitions/datedTaggedRecords/additionalItems/properties/value",
+		"#/definitions/otherRecords/items/properties/createdAt",
+		"#/definitions/tags/additionalProperties/properties/id",
+		"#/definitions/tags/additionalProperties/properties/value",
+		"#/definitions/datedRecords/items/0",
+		"#/definitions/datedRecords/items/1",
+		"#/definitions/datedTag/allOf/0",
+		"#/definitions/datedTag/allOf/1",
+		"#/definitions/datedTag/properties/id",
+		"#/definitions/datedTag/properties/value",
+		"#/definitions/datedTaggedRecords/items/0",
+		"#/definitions/datedTaggedRecords/items/1",
+		"#/definitions/namedAgain/properties/id",
+		"#/definitions/namedThing/properties/name",
+		"#/definitions/pneumonoultramicroscopicsilicovolcanoconiosisAntidisestablishmentarianism/properties/floccinaucinihilipilificationCreatedAt",
+		"#/definitions/records/items/0",
+		"#/definitions/datedTaggedRecords/additionalItems",
+		"#/definitions/otherRecords/items",
+		"#/definitions/tags/additionalProperties",
+		"#/definitions/datedRecords",
+		"#/definitions/datedTag",
+		"#/definitions/datedTaggedRecords",
+		"#/definitions/namedAgain",
+		"#/definitions/namedThing",
+		"#/definitions/otherRecords",
+		"#/definitions/pneumonoultramicroscopicsilicovolcanoconiosisAntidisestablishmentarianism",
+		"#/definitions/records",
+		"#/definitions/tags",
+	}
+	if assert.NoError(t, err) {
+		a := New(sp)
+		result := sortDepthFirst(a.allSchemas)
+		assert.Equal(t, values, result)
+	}
+}
+
+func TestBuildNameWithReservedKeyWord(t *testing.T) {
+	s := splitKey([]string{"definitions", "fullview", "properties", "properties"})
+	startIdx := 2
+	segments := []string{"fullview"}
+	newName := s.BuildName(segments, startIdx, nil)
+	assert.Equal(t, "fullview properties", newName)
+	s = splitKey([]string{"definitions", "fullview", "properties", "properties", "properties", "properties", "properties", "properties"})
+	newName = s.BuildName(segments, startIdx, nil)
+	assert.Equal(t, "fullview properties properties properties", newName)
+}
+
+func TestNameInlinedSchemas(t *testing.T) {
+	cwd, _ := os.Getwd()
+	bp := filepath.Join(cwd, "fixtures", "nested_inline_schemas.yml")
+	sp, err := loadSpec(bp)
+	err = spec.ExpandSpec(sp, &spec.ExpandOptions{
+		RelativeBase: bp,
+		SkipSchemas:  true,
+	})
+	assert.NoError(t, err)
+	values := []struct {
+		Key      string
+		Location string
+		Ref      spec.Ref
+	}{
+		{"#/paths/~1some~1where~1{id}/get/parameters/2/schema/properties/record/items/2/properties/name", "#/definitions/getSomeWhereIdParamsBodyRecordItems2/properties/name", spec.MustCreateRef("#/definitions/getSomeWhereIdParamsBodyRecordItems2Name")},
+		{"#/paths/~1some~1where~1{id}/get/parameters/2/schema/properties/record/items/1", "#/definitions/getSomeWhereIdParamsBodyRecord/items/1", spec.MustCreateRef("#/definitions/getSomeWhereIdParamsBodyRecordItems1")},
+		{"#/paths/~1some~1where~1{id}/get/parameters/2/schema/properties/record/items/2", "#/definitions/getSomeWhereIdParamsBodyRecord/items/2", spec.MustCreateRef("#/definitions/getSomeWhereIdParamsBodyRecordItems2")},
+		{"#/paths/~1some~1where~1{id}/get/responses/200/schema/properties/record/items/2/properties/name", "#/definitions/getSomeWhereIdOKBodyRecordItems2/properties/name", spec.MustCreateRef("#/definitions/getSomeWhereIdOKBodyRecordItems2Name")},
+		{"#/paths/~1some~1where~1{id}/get/responses/200/schema/properties/record/items/1", "#/definitions/getSomeWhereIdOKBodyRecord/items/1", spec.MustCreateRef("#/definitions/getSomeWhereIdOKBodyRecordItems1")},
+		{"#/paths/~1some~1where~1{id}/get/responses/200/schema/properties/record/items/2", "#/definitions/getSomeWhereIdOKBodyRecord/items/2", spec.MustCreateRef("#/definitions/getSomeWhereIdOKBodyRecordItems2")},
+		{"#/paths/~1some~1where~1{id}/get/responses/200/schema/properties/record", "#/definitions/getSomeWhereIdOKBody/properties/record", spec.MustCreateRef("#/definitions/getSomeWhereIdOKBodyRecord")},
+		{"#/paths/~1some~1where~1{id}/get/responses/200/schema", "#/paths/~1some~1where~1{id}/get/responses/200/schema", spec.MustCreateRef("#/definitions/getSomeWhereIdOKBody")},
+		{"#/paths/~1some~1where~1{id}/get/responses/default/schema/properties/record/items/2/properties/name", "#/definitions/getSomeWhereIdDefaultBodyRecordItems2/properties/name", spec.MustCreateRef("#/definitions/getSomeWhereIdDefaultBodyRecordItems2Name")},
+		{"#/paths/~1some~1where~1{id}/get/responses/default/schema/properties/record/items/1", "#/definitions/getSomeWhereIdDefaultBodyRecord/items/1", spec.MustCreateRef("#/definitions/getSomeWhereIdDefaultBodyRecordItems1")},
+		{"#/paths/~1some~1where~1{id}/get/responses/default/schema/properties/record/items/2", "#/definitions/getSomeWhereIdDefaultBodyRecord/items/2", spec.MustCreateRef("#/definitions/getSomeWhereIdDefaultBodyRecordItems2")},
+		{"#/paths/~1some~1where~1{id}/get/responses/default/schema/properties/record", "#/definitions/getSomeWhereIdDefaultBody/properties/record", spec.MustCreateRef("#/definitions/getSomeWhereIdDefaultBodyRecord")},
+		{"#/paths/~1some~1where~1{id}/get/responses/default/schema", "#/paths/~1some~1where~1{id}/get/responses/default/schema", spec.MustCreateRef("#/definitions/getSomeWhereIdDefaultBody")},
+		{"#/definitions/nestedThing/properties/record/items/2/allOf/1/additionalProperties", "#/definitions/nestedThingRecordItems2AllOf1/additionalProperties", spec.MustCreateRef("#/definitions/nestedThingRecordItems2AllOf1AdditionalProperties")},
+		{"#/definitions/nestedThing/properties/record/items/2/allOf/1", "#/definitions/nestedThingRecordItems2/allOf/1", spec.MustCreateRef("#/definitions/nestedThingRecordItems2AllOf1")},
+		{"#/definitions/nestedThing/properties/record/items/2/properties/name", "#/definitions/nestedThingRecordItems2/properties/name", spec.MustCreateRef("#/definitions/nestedThingRecordItems2Name")},
+		{"#/definitions/nestedThing/properties/record/items/1", "#/definitions/nestedThingRecord/items/1", spec.MustCreateRef("#/definitions/nestedThingRecordItems1")},
+		{"#/definitions/nestedThing/properties/record/items/2", "#/definitions/nestedThingRecord/items/2", spec.MustCreateRef("#/definitions/nestedThingRecordItems2")},
+		{"#/definitions/datedRecords/items/1", "#/definitions/datedRecords/items/1", spec.MustCreateRef("#/definitions/datedRecordsItems1")},
+		{"#/definitions/datedTaggedRecords/items/1", "#/definitions/datedTaggedRecords/items/1", spec.MustCreateRef("#/definitions/datedTaggedRecordsItems1")},
+		{"#/definitions/namedThing/properties/name", "#/definitions/namedThing/properties/name", spec.MustCreateRef("#/definitions/namedThingName")},
+		{"#/definitions/nestedThing/properties/record", "#/definitions/nestedThing/properties/record", spec.MustCreateRef("#/definitions/nestedThingRecord")},
+		{"#/definitions/records/items/0", "#/definitions/records/items/0", spec.MustCreateRef("#/definitions/recordsItems0")},
+		{"#/definitions/datedTaggedRecords/additionalItems", "#/definitions/datedTaggedRecords/additionalItems", spec.MustCreateRef("#/definitions/datedTaggedRecordsItemsAdditionalItems")},
+		{"#/definitions/otherRecords/items", "#/definitions/otherRecords/items", spec.MustCreateRef("#/definitions/otherRecordsItems")},
+		{"#/definitions/tags/additionalProperties", "#/definitions/tags/additionalProperties", spec.MustCreateRef("#/definitions/tagsAdditionalProperties")},
+	}
+	if assert.NoError(t, err) {
+		_, err := nameInlinedSchemas(&FlattenOpts{
+			Spec:     New(sp),
+			BasePath: bp,
+>>>>>>> a5ee2e3 (temp work)
 		})
 	}
 
@@ -389,6 +835,7 @@ func TestFlatten_CheckRef(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestFlatten_FullWithOAIGen(t *testing.T) {
 	bp := filepath.Join("fixtures", "oaigen", "fixture-oaigen.yaml")
 	sp := antest.LoadOrFail(t, bp)
@@ -1390,3 +1837,18 @@ func testFlattenWithDefaults(t *testing.T, bp string) *Spec {
 
 	return an
 }
+=======
+func TestGoNamesPropagation(t *testing.T) {
+	bp := filepath.Join("fixtures", "fixture-tuple.yaml")
+	sp, err := loadSpec(bp)
+	if assert.NoError(t, err) {
+		err := Flatten(FlattenOpts{Spec: New(sp), BasePath: bp})
+		if assert.NoError(t, err) {
+			//b, _ := sp.MarshalJSON()
+			//b, _ := json.MarshalIndent(inlinedInternalKeys, "", "  ")
+			//t.Log(string(b))
+
+		}
+	}
+}
+>>>>>>> a5ee2e3 (temp work)

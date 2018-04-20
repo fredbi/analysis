@@ -1,0 +1,391 @@
+swagger: '2.0'
+
+info:
+  version: "1.0.0"
+  title: fixture for enums with additional 
+  description: |
+    A test of enum validation generation for additionalProperties and additionalItems.
+    Derived from fixtures/codegen/todolist.enum.yml
+produces:
+  - application/json
+consumes:
+  - application/json
+paths:
+  /models:
+    get:
+      operationId: modelOp
+      summary: many model variations
+      description: Used to see if a codegen can render all the possible enum categories
+      tags:
+        - testcgen
+      responses:
+        default:
+          description: Generic Out
+definitions:
+  StringThing:
+    type: string
+    enum: [
+      "bird",
+      "fish",
+      "mammal" 
+      ]
+    x-go-enum-name: Animals                 # <- observe this shall be exported
+    x-go-const-names:
+      - Bird
+      - Fish
+      - Mammal
+
+  IntThing:
+    type: integer
+    format: int32
+    enum: [ 22, 27, 32]
+    x-go-const-names:
+      - TwentyTwo
+      - TwentySeven
+      - ThirtyTwo
+
+  FloatThing:
+    type: number
+    format: float
+    enum: [ 21, 28, 35]
+    x-go-enum-name: AllowedFloats           # <- observe this shall be exported
+
+  SliceThing:
+    type: array
+    enum:
+      - [ "sparrow", "dove", "chicken" ]
+      - [ "cod", "salmon", "shark" ]
+      - [ "monkey", "tiger", "elephant" ]
+    items:
+      type: string
+      x-go-enum-name: AnimalCategories      # <- observe this shall be exported
+
+  SliceAndItemsThing:
+    type: array
+    enum:
+      - [ "sparrow", "dove", "chicken" ]
+      - [ "cod", "salmon", "shark" ]
+      - [ "monkey", "tiger", "elephant" ]
+    items:
+      type: string
+      enum: ["sparrow", "dove", "chicken", "cod", "salmon", "shark", "monkey", "tiger", "elephant"]
+
+  SliceAndAdditionalItemsThing:
+    type: array
+    enum:
+      - [ "sparrow", "dove", "chicken" ]
+      - [ "cod", "salmon", "shark" ]
+      - [ "monkey", "tiger", "elephant" ]
+    items:
+      - type: string
+        enum: ["sparrow", "dove", "chicken", "cod", "salmon", "shark", "monkey", "tiger", "elephant"]
+    additionalItems:
+      type: number
+      format: float
+      enum: [ 43, 44, 45 ]
+
+  MapThing:
+    type: object
+    enum:
+      - snack: "snickers"
+      - snack: "twix"
+      - snack: "mars"
+    additionalProperties:
+      type: string
+      enum: [ "snickers", "twix", "mars" ]
+
+  MapThingWithObject:
+    type: object
+    properties:
+      snack:
+        type: string
+        pattern: "^[a-z]$"
+        minLength: 4
+    enum:
+      - snack: "snickers"
+      - snack: "twix"
+      - snack: "mars"
+    additionalProperties:
+      type: object
+      properties: 
+        additionalSnack:
+          type: string
+          enum: [ "bread", "jam", "butter" ]
+      enum:
+        - additionalSnack: bread
+        - additionalSnack: jam
+  MapThingWithItems:
+    type: object
+    properties:
+      snack:
+        type: string
+        pattern: "^[a-z]$"
+        minLength: 4
+    enum:
+      - snack: "snickers"
+      - snack: "twix"
+      - snack: "mars"
+    additionalProperties:
+      type: array
+      minItems: 2
+      maxItems: 3
+      items: 
+        type: string
+        minItems: 1
+        enum: [ "snickers", "twix", "mars" ]
+      enum:
+        -
+          - twix
+          - snickers 
+        - 
+          - mars
+
+  ObjectThing:
+    type: object
+    required:
+      - name
+    properties:
+      name:
+        type: string
+        enum:
+          - one
+          - two
+          - three
+      flower:
+        type: integer
+        format: int32
+        enum:
+          - 1
+          - 2
+          - 3
+      flour:
+        type: number
+        format: float
+        enum:
+          - 1.0
+          - 2.0
+          - 3.0
+      cats:
+        type: array
+        items:
+          type: string
+          enum:
+            - four
+            - five
+            - six
+      nestedCats:
+        type: array
+        items:
+          type: array
+          items:
+            type: string
+            enum:
+              - four
+              - five
+              - six
+
+      lions:
+        type: array
+        items:
+          - type: string
+            enum: ["seven", "eight", "nine"]
+          - type: integer
+            format: int64
+            enum:
+              - 7
+              - 8
+              - 8
+            x-go-enum-name: conflictingEnum
+            x-go-const-names:
+              - LionsSeven
+              - LionsEight
+              - LionsNine
+        additionalItems:
+          type: number
+          format: double
+          enum:
+            - 7.0
+            - 8.0
+            - 9.0
+
+      lionsFamilies:
+        type: array
+        items:
+          - type: string
+            enum: ["seven", "eight", "nine"]    # <- observe how conlict is resolved
+          - type: integer
+            format: int64
+            enum:
+              - 7
+              - 8
+              - 8
+        additionalItems:
+          type: array
+          items:
+            type: float
+            format: double
+            enum:
+              - 7.0
+              - 8.0
+              - 9.0
+            enum:           # <- observe 2 validation levels
+            - 
+              - 7.0
+              - 8.0
+            - 
+              - 7.0
+              - 9.0
+            - 
+              - 8.0
+              - 9.0
+          x-go-const-names:
+            - familyCombo1
+            - familyCombo2
+            - familyCombo3
+
+      wolves:
+        type: object
+        enum:
+          - snack: bambi
+          - snack: tweetie
+          - snack: "red riding hood"
+        additionalProperties:
+          type: string
+          enum: ["snow white", "tweetie", "bambi", "red riding hood"]
+          x-go-enum-name: disneyCartoonsEnum
+
+  ComposedThing:
+    type: object
+    allOf:
+      - $ref: "#/definitions/StringThing"
+      - type: object
+        required: [ "name" ]
+        properties:
+          name:
+            type: string
+            enum:
+              - one
+              - two
+              - three
+
+  # provided as part of issue #72
+  # the enum of the anonymous schema under delegate comes out without a validation.
+  NewPrototype:
+    required:
+      - role
+      - delegate
+    type: object
+    description: Description of a new prototype
+    properties:
+      activating_user:
+        required:
+          - name
+        type: object
+        description: Repository creating user to whom the rule should apply
+        properties:
+          name:
+            type: string
+            description: The username for the activating_user
+      role:
+        enum:
+          - read
+          - write
+          - admin
+        type: string
+        minLength: 1
+        description: Role that should be applied to the delegate
+      delegate:
+        required:
+          - name
+          - kind
+        type: object
+        description: Information about the user or team to which the rule grants access
+        properties:
+          kind:
+            enum:
+              - user
+              - team
+            type: string
+            description: Whether the delegate is a user or a team
+          name:
+            type: string
+            description: The name for the delegate team or user
+
+  ComputeInstance:
+    type: object
+    description: Description of the compute instance
+    required:
+      - id
+      - region
+    properties:
+      id:
+        type: string
+      region:
+        type: string
+        enum:
+          - us-west-2
+          - us-east-1
+
+  slp_action_enum:
+    type: string
+    enum:
+      - slp.action.STOP
+
+  Link:
+    type: string
+    format: uri
+
+  Cluster:
+    type: object
+    description: The cluster layout.
+    required:
+      - links
+      - data
+    properties:
+      links:
+        type: object
+        required:
+          - self
+        properties:
+          self:
+            $ref: "#/definitions/Link"
+      data:
+        type: object
+        required:
+          - status
+        properties:
+          noOfNodes:
+            type: integer
+            format: int32
+            description: Number of nodes the cluster has
+            enum:
+              - 10
+              - 50
+              - 100
+            x-go-const-names:
+              - smallCluster
+              - mediumCluster
+              - bigCluster
+          scheduler:
+            type: string
+            format: date
+            description: The schedule when this needs to be used by the job scheduler.
+            enum:
+              - '2018-01-01'
+              - '2018-04-01'
+              - '2018-10-01'
+          status:
+            type: string
+            default: "scheduled"
+            description: The status of the cluster. It will be one of scheduled, building, up, deleting, exited or error.
+            enum:
+              - scheduled
+              - building
+              - up
+              - deleting
+              - exited
+              - error
+          clusterError:
+            type: string
+            description: Error associated with building or tearingdown the cluster.
+
