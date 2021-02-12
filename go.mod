@@ -1,5 +1,7 @@
 module github.com/go-openapi/analysis
 
+replace github.com/go-openapi/spec => /home/fred/src/github.com/go-openapi/spec
+
 require (
 	github.com/go-openapi/jsonpointer v0.20.0
 	github.com/go-openapi/spec v0.20.11
@@ -18,7 +20,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	go.mongodb.org/mongo-driver v1.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

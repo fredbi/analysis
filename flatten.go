@@ -17,7 +17,9 @@ package analysis
 import (
 	"fmt"
 	"log"
-	"path"
+	"net/http"
+	"net/url"
+	slashpath "path"
 	"sort"
 	"strings"
 
@@ -28,6 +30,10 @@ import (
 	"github.com/go-openapi/analysis/internal/flatten/sortref"
 	"github.com/go-openapi/jsonpointer"
 	"github.com/go-openapi/spec"
+	"github.com/go-openapi/jsonreference"
+	swspec "github.com/go-openapi/spec"
+	"github.com/go-openapi/spec/normalizer"
+	"github.com/go-openapi/swag"
 )
 
 const definitionsPath = "#/definitions"
@@ -445,6 +451,383 @@ func importExternalReferences(opts *FlattenOpts) (bool, error) {
 	return complete, nil
 }
 
+<<<<<<< HEAD
+=======
+type refRevIdx struct {
+	Ref  swspec.Ref
+	Keys []string
+}
+
+// rebaseRef rebase a remote ref relative to a base ref.
+//
+// NOTE: does not support JSONschema ID for $ref (we assume we are working with swagger specs here).
+//
+// NOTE(windows):
+// * refs are assumed to have been normalized with drive letter lower cased (from go-openapi/spec)
+// * "/ in paths may appear as escape sequences
+func rebaseRef(baseRef string, ref string) string {
+	baseRef, _ = url.PathUnescape(baseRef)
+	r := normalizer.DenormalizeRef(jsonreference.MustCreateRef(ref), baseRef, "")
+	return r.String()
+	/*
+		debugLog("rebasing ref: %s onto %s", ref, baseRef)
+		baseRef, _ = url.PathUnescape(baseRef)
+		ref, _ = url.PathUnescape(ref)
+		if baseRef == "" || baseRef == "." || strings.HasPrefix(baseRef, "#") {
+			return ref
+		}
+
+		parts := strings.Split(ref, "#")
+
+		baseParts := strings.Split(baseRef, "#")
+		baseURL, _ := url.Parse(baseParts[0])
+		if strings.HasPrefix(ref, "#") {
+			if baseURL.Host == "" {
+				return strings.Join([]string{baseParts[0], parts[1]}, "#")
+			}
+			return strings.Join([]string{baseParts[0], parts[1]}, "#")
+		}
+
+		refURL, _ := url.Parse(parts[0])
+		if refURL.Host != "" || filepath.IsAbs(parts[0]) {
+			// not rebasing an absolute path
+			return ref
+		}
+
+		// there is a relative path
+		var basePath string
+		if baseURL.Host != "" {
+			// when there is a host, standard URI rules apply (with "/")
+			baseURL.Path = slashpath.Dir(baseURL.Path)
+			baseURL.Path = slashpath.Join(baseURL.Path, "/"+parts[0])
+			return baseURL.String()
+		}
+
+		// this is a local relative path
+		// basePart[0] and parts[0] are local filesystem directories/files
+		basePath = filepath.Dir(baseParts[0])
+		relPath := filepath.Join(basePath, string(filepath.Separator)+parts[0])
+		if len(parts) > 1 {
+			return strings.Join([]string{relPath, parts[1]}, "#")
+		}
+		return relPath
+	*/
+}
+
+// normalizePath renders absolute path on remote file refs
+func normalizePath(ref swspec.Ref, opts *FlattenOpts) (normalizedPath string) {
+	return normalizer.NormalizeURI(ref.String(), opts.BasePath)
+	/*
+			uri, _ := url.PathUnescape(ref.String())
+			if ref.HasFragmentOnly || filepath.IsAbs(uri) {
+				normalizedPath = uri
+				return
+			}
+
+			refURL, _ := url.Parse(uri)
+			if refURL.Host != "" {
+				normalizedPath = uri
+				return
+			}
+
+			parts := strings.Split(uri, "#")
+			// BasePath, parts[0] are local filesystem directories, guaranteed to be absolute at this stage
+			parts[0] = filepath.Join(filepath.Dir(opts.BasePath), parts[0])
+			normalizedPath = strings.Join(parts, "#")
+		return
+	*/
+}
+
+func reverseIndexForSchemaRefs(opts *FlattenOpts) map[string]refRevIdx {
+	collected := make(map[string]refRevIdx)
+	for key, schRef := range opts.Spec.references.schemas {
+		// normalize paths before sorting,
+		// so we get together keys in same external file
+		normalizedPath := normalizePath(schRef, opts)
+		if entry, ok := collected[normalizedPath]; ok {
+			entry.Keys = append(entry.Keys, key)
+			collected[normalizedPath] = entry
+		} else {
+			collected[normalizedPath] = refRevIdx{
+				Ref:  schRef,
+				Keys: []string{key},
+			}
+		}
+	}
+	return collected
+}
+
+func nameFromRef(ref swspec.Ref) string {
+	u := ref.GetURL()
+	if u.Fragment != "" {
+		return swag.ToJSONName(slashpath.Base(u.Fragment))
+	}
+	if u.Path != "" {
+		bn := slashpath.Base(u.Path)
+		if bn != "" && bn != "/" {
+			ext := slashpath.Ext(bn)
+			if ext != "" {
+				return swag.ToJSONName(bn[:len(bn)-len(ext)])
+			}
+			return swag.ToJSONName(bn)
+		}
+	}
+	return swag.ToJSONName(strings.ReplaceAll(u.Host, ".", " "))
+}
+
+func saveSchema(spec *swspec.Swagger, name string, schema *swspec.Schema) {
+	if schema == nil {
+		return
+	}
+	if spec.Definitions == nil {
+		spec.Definitions = make(map[string]swspec.Schema, 150)
+	}
+	spec.Definitions[name] = *schema
+}
+
+// getPointerFromKey retrieves the content of the JSON pointer "key"
+func getPointerFromKey(spec interface{}, key string) (string, interface{}, error) {
+	switch spec.(type) {
+	case *swspec.Schema:
+	case *swspec.Swagger:
+	default:
+		panic("unexpected type used in getPointerFromKey")
+	}
+	if key == "#/" {
+		return "", spec, nil
+	}
+	// unescape chars in key, e.g. "{}" from path params
+	pth, _ := internal.PathUnescape(key[1:])
+	ptr, err := jsonpointer.New(pth)
+	if err != nil {
+		return "", nil, err
+	}
+
+	value, _, err := ptr.Get(spec)
+	if err != nil {
+		debugLog("error when getting key: %s with path: %s", key, pth)
+		return "", nil, err
+	}
+	return pth, value, nil
+}
+
+// getParentFromKey retrieves the container of the JSON pointer "key"
+func getParentFromKey(spec interface{}, key string) (string, string, interface{}, error) {
+	switch spec.(type) {
+	case *swspec.Schema:
+	case *swspec.Swagger:
+	default:
+		panic("unexpected type used in getPointerFromKey")
+	}
+	// unescape chars in key, e.g. "{}" from path params
+	pth, _ := internal.PathUnescape(key[1:])
+
+	parent, entry := slashpath.Dir(pth), slashpath.Base(pth)
+	debugLog("getting schema holder at: %s, with entry: %s", parent, entry)
+
+	pptr, err := jsonpointer.New(parent)
+	if err != nil {
+		return "", "", nil, err
+	}
+	pvalue, _, err := pptr.Get(spec)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("can't get parent for %s: %v", parent, err)
+	}
+	return parent, entry, pvalue, nil
+}
+
+// updateRef replaces a ref by another one
+func updateRef(spec interface{}, key string, ref swspec.Ref) error {
+	switch spec.(type) {
+	case *swspec.Schema:
+	case *swspec.Swagger:
+	default:
+		panic("unexpected type used in getPointerFromKey")
+	}
+	debugLog("updating ref for %s with %s", key, ref.String())
+	pth, value, err := getPointerFromKey(spec, key)
+	if err != nil {
+		return err
+	}
+
+	switch refable := value.(type) {
+	case *swspec.Schema:
+		refable.Ref = ref
+	case *swspec.SchemaOrArray:
+		if refable.Schema != nil {
+			refable.Schema.Ref = ref
+		}
+	case *swspec.SchemaOrBool:
+		if refable.Schema != nil {
+			refable.Schema.Ref = ref
+		}
+	case swspec.Schema:
+		debugLog("rewriting holder for %T", refable)
+		_, entry, pvalue, erp := getParentFromKey(spec, key)
+		if erp != nil {
+			return err
+		}
+		switch container := pvalue.(type) {
+		case swspec.Definitions:
+			container[entry] = swspec.Schema{SchemaProps: swspec.SchemaProps{Ref: ref}}
+
+		case map[string]swspec.Schema:
+			container[entry] = swspec.Schema{SchemaProps: swspec.SchemaProps{Ref: ref}}
+
+		case []swspec.Schema:
+			idx, err := strconv.Atoi(entry)
+			if err != nil {
+				return fmt.Errorf("%s not a number: %v", pth, err)
+			}
+			container[idx] = swspec.Schema{SchemaProps: swspec.SchemaProps{Ref: ref}}
+
+		case *swspec.SchemaOrArray:
+			// NOTE: this is necessarily an array - otherwise, the parent would be *Schema
+			idx, err := strconv.Atoi(entry)
+			if err != nil {
+				return fmt.Errorf("%s not a number: %v", pth, err)
+			}
+			container.Schemas[idx] = swspec.Schema{SchemaProps: swspec.SchemaProps{Ref: ref}}
+
+		case swspec.SchemaProperties:
+			container[entry] = swspec.Schema{SchemaProps: swspec.SchemaProps{Ref: ref}}
+
+		// NOTE: can't have case *swspec.SchemaOrBool = parent in this case is *Schema
+
+		default:
+			return fmt.Errorf("unhandled container type at %s: %T", key, value)
+		}
+
+	default:
+		return fmt.Errorf("no schema with ref found at %s for %T", key, value)
+	}
+
+	return nil
+}
+
+// updateRefWithSchema replaces a ref with a schema (i.e. re-inline schema)
+func updateRefWithSchema(spec *swspec.Swagger, key string, sch *swspec.Schema) error {
+	debugLog("updating ref for %s with schema", key)
+	pth, value, err := getPointerFromKey(spec, key)
+	if err != nil {
+		return err
+	}
+
+	switch refable := value.(type) {
+	case *swspec.Schema:
+		*refable = *sch
+	case swspec.Schema:
+		_, entry, pvalue, erp := getParentFromKey(spec, key)
+		if erp != nil {
+			return err
+		}
+		switch container := pvalue.(type) {
+		case swspec.Definitions:
+			container[entry] = *sch
+
+		case map[string]swspec.Schema:
+			container[entry] = *sch
+
+		case []swspec.Schema:
+			idx, err := strconv.Atoi(entry)
+			if err != nil {
+				return fmt.Errorf("%s not a number: %v", pth, err)
+			}
+			container[idx] = *sch
+
+		case *swspec.SchemaOrArray:
+			// NOTE: this is necessarily an array - otherwise, the parent would be *Schema
+			idx, err := strconv.Atoi(entry)
+			if err != nil {
+				return fmt.Errorf("%s not a number: %v", pth, err)
+			}
+			container.Schemas[idx] = *sch
+
+		case swspec.SchemaProperties:
+			container[entry] = *sch
+
+		// NOTE: can't have case *swspec.SchemaOrBool = parent in this case is *Schema
+
+		default:
+			return fmt.Errorf("unhandled type for parent of [%s]: %T", key, value)
+		}
+	case *swspec.SchemaOrArray:
+		*refable.Schema = *sch
+	// NOTE: can't have case *swspec.SchemaOrBool = parent in this case is *Schema
+	case *swspec.SchemaOrBool:
+		*refable.Schema = *sch
+	default:
+		return fmt.Errorf("no schema with ref found at %s for %T", key, value)
+	}
+
+	return nil
+}
+
+// TODO(fred): use swag.ContainsString
+func containsString(names []string, name string) bool {
+	for _, nm := range names {
+		if nm == name {
+			return true
+		}
+	}
+	return false
+}
+
+type opRef struct {
+	Method string
+	Path   string
+	Key    string
+	ID     string
+	Op     *swspec.Operation
+	Ref    swspec.Ref
+}
+
+type opRefs []opRef
+
+func (o opRefs) Len() int           { return len(o) }
+func (o opRefs) Swap(i, j int)      { o[i], o[j] = o[j], o[i] }
+func (o opRefs) Less(i, j int) bool { return o[i].Key < o[j].Key }
+
+func gatherOperations(specDoc *Spec, operationIDs []string) map[string]opRef {
+	var oprefs opRefs
+
+	for method, pathItem := range specDoc.Operations() {
+		for pth, operation := range pathItem {
+			vv := *operation
+			oprefs = append(oprefs, opRef{
+				Key:    swag.ToGoName(strings.ToLower(method) + " " + pth),
+				Method: method,
+				Path:   pth,
+				ID:     vv.ID,
+				Op:     &vv,
+				Ref:    swspec.MustCreateRef("#" + slashpath.Join("/paths", jsonpointer.Escape(pth), method)),
+			})
+		}
+	}
+
+	sort.Sort(oprefs)
+
+	operations := make(map[string]opRef)
+	for _, opr := range oprefs {
+		nm := opr.ID
+		if nm == "" {
+			nm = opr.Key
+		}
+
+		oo, found := operations[nm]
+		if found && oo.Method != opr.Method && oo.Path != opr.Path {
+			nm = opr.Key
+		}
+		if len(operationIDs) == 0 || containsString(operationIDs, opr.ID) || containsString(operationIDs, nm) {
+			opr.ID = nm
+			opr.Op.ID = nm
+			operations[nm] = opr
+		}
+	}
+	return operations
+}
+
+>>>>>>> 0d2a5de (factorized URL normalization)
 // stripPointersAndOAIGen removes anonymous JSON pointers from spec and chain with name conflicts handler.
 // This loops until the spec has no such pointer and all name conflicts have been reduced as much as possible.
 func stripPointersAndOAIGen(opts *FlattenOpts) error {
