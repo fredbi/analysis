@@ -16,9 +16,10 @@ const definitionsPath = "#/definitions"
 
 var debugLog = debug.GetLogger("analysis/flatten/replace", os.Getenv("SWAGGER_DEBUG") != "")
 
-// RewriteSchemaToRef replaces a schema with a Ref
-func RewriteSchemaToRef(sp *spec.Swagger, key string, ref spec.Ref) error {
+// rewriteSchemaToRef replaces a schema with a Ref
+func rewriteSchemaToRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 	debugLog("rewriting schema to ref for %s with %s", key, ref.String())
+
 	_, value, err := getPointerFromKey(sp, key)
 	if err != nil {
 		return err
@@ -41,7 +42,7 @@ func RewriteSchemaToRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 			refable.Schema = &spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
 		}
 	default:
-		return fmt.Errorf("no schema with ref found at %s for %T", key, value)
+		return ErrNoSchema(key, value)
 	}
 
 	return nil
@@ -66,7 +67,7 @@ func rewriteParentRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 	case *spec.Responses:
 		statusCode, err := strconv.Atoi(entry)
 		if err != nil {
-			return fmt.Errorf("%s not a number: %w", key[1:], err)
+			return ErrNotANumber(key[1:], err)
 		}
 		resp := container.StatusCodeResponses[statusCode]
 		resp.Schema = &spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
@@ -90,7 +91,7 @@ func rewriteParentRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 	case []spec.Parameter:
 		idx, err := strconv.Atoi(entry)
 		if err != nil {
-			return fmt.Errorf("%s not a number: %w", key[1:], err)
+			return ErrNotANumber(key[1:], err)
 		}
 		param := container[idx]
 		param.Schema = &spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
@@ -105,7 +106,7 @@ func rewriteParentRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 	case []spec.Schema:
 		idx, err := strconv.Atoi(entry)
 		if err != nil {
-			return fmt.Errorf("%s not a number: %w", key[1:], err)
+			return ErrNotANumber(key[1:], err)
 		}
 		container[idx] = spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
 
@@ -113,7 +114,7 @@ func rewriteParentRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 		// NOTE: this is necessarily an array - otherwise, the parent would be *Schema
 		idx, err := strconv.Atoi(entry)
 		if err != nil {
-			return fmt.Errorf("%s not a number: %w", key[1:], err)
+			return ErrNotANumber(key[1:], err)
 		}
 		container.Schemas[idx] = spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
 
@@ -123,7 +124,7 @@ func rewriteParentRef(sp *spec.Swagger, key string, ref spec.Ref) error {
 	// NOTE: can't have case *spec.SchemaOrBool = parent in this case is *Schema
 
 	default:
-		return fmt.Errorf("unhandled parent schema rewrite %s (%T)", key, pvalue)
+		return ErrUnhandledType(key, pvalue)
 	}
 
 	return nil
@@ -137,9 +138,11 @@ func getPointerFromKey(sp interface{}, key string) (string, interface{}, error) 
 	default:
 		panic("unexpected type used in getPointerFromKey")
 	}
+
 	if key == "#/" {
 		return "", sp, nil
 	}
+
 	// unescape chars in key, e.g. "{}" from path params
 	pth, _ := url.PathUnescape(key[1:])
 	ptr, err := jsonpointer.New(pth)
@@ -177,14 +180,14 @@ func getParentFromKey(sp interface{}, key string) (string, string, interface{}, 
 	}
 	pvalue, _, err := pptr.Get(sp)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("can't get parent for %s: %w", parent, err)
+		return "", "", nil, ErrParentResolve(parent, err)
 	}
 
 	return parent, entry, pvalue, nil
 }
 
-// UpdateRef replaces a ref by another one
-func UpdateRef(sp interface{}, key string, ref spec.Ref) error {
+// updateRef replaces a ref by another one
+func updateRef(sp interface{}, key string, ref spec.Ref) error {
 	switch sp.(type) {
 	case *spec.Schema:
 	case *spec.Swagger:
@@ -224,7 +227,7 @@ func UpdateRef(sp interface{}, key string, ref spec.Ref) error {
 		case []spec.Schema:
 			idx, err := strconv.Atoi(entry)
 			if err != nil {
-				return fmt.Errorf("%s not a number: %w", pth, err)
+				return ErrNotANumber(pth, err)
 			}
 			container[idx] = spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
 
@@ -232,7 +235,7 @@ func UpdateRef(sp interface{}, key string, ref spec.Ref) error {
 			// NOTE: this is necessarily an array - otherwise, the parent would be *Schema
 			idx, err := strconv.Atoi(entry)
 			if err != nil {
-				return fmt.Errorf("%s not a number: %w", pth, err)
+				return ErrNotANumber(pth, err)
 			}
 			container.Schemas[idx] = spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
 
@@ -242,18 +245,18 @@ func UpdateRef(sp interface{}, key string, ref spec.Ref) error {
 		// NOTE: can't have case *spec.SchemaOrBool = parent in this case is *Schema
 
 		default:
-			return fmt.Errorf("unhandled container type at %s: %T", key, value)
+			return ErrUnhandledType(key, value)
 		}
 
 	default:
-		return fmt.Errorf("no schema with ref found at %s for %T", key, value)
+		return ErrNoSchema(key, value)
 	}
 
 	return nil
 }
 
-// UpdateRefWithSchema replaces a ref with a schema (i.e. re-inline schema)
-func UpdateRefWithSchema(sp *spec.Swagger, key string, sch *spec.Schema) error {
+// updateRefWithSchema replaces a ref with a schema (i.e. re-inline schema)
+func updateRefWithSchema(sp *spec.Swagger, key string, sch *spec.Schema) error {
 	debugLog("updating ref for %s with schema", key)
 	pth, value, err := getPointerFromKey(sp, key)
 	if err != nil {
@@ -278,7 +281,7 @@ func UpdateRefWithSchema(sp *spec.Swagger, key string, sch *spec.Schema) error {
 		case []spec.Schema:
 			idx, err := strconv.Atoi(entry)
 			if err != nil {
-				return fmt.Errorf("%s not a number: %w", pth, err)
+				return ErrNotANumber(pth, err)
 			}
 			container[idx] = *sch
 
@@ -286,7 +289,7 @@ func UpdateRefWithSchema(sp *spec.Swagger, key string, sch *spec.Schema) error {
 			// NOTE: this is necessarily an array - otherwise, the parent would be *Schema
 			idx, err := strconv.Atoi(entry)
 			if err != nil {
-				return fmt.Errorf("%s not a number: %w", pth, err)
+				return ErrNotANumber(pth, err)
 			}
 			container.Schemas[idx] = *sch
 
@@ -296,7 +299,7 @@ func UpdateRefWithSchema(sp *spec.Swagger, key string, sch *spec.Schema) error {
 		// NOTE: can't have case *spec.SchemaOrBool = parent in this case is *Schema
 
 		default:
-			return fmt.Errorf("unhandled type for parent of [%s]: %T", key, value)
+			return ErrUnhandledType(key, value)
 		}
 	case *spec.SchemaOrArray:
 		*refable.Schema = *sch
@@ -304,25 +307,18 @@ func UpdateRefWithSchema(sp *spec.Swagger, key string, sch *spec.Schema) error {
 	case *spec.SchemaOrBool:
 		*refable.Schema = *sch
 	default:
-		return fmt.Errorf("no schema with ref found at %s for %T", key, value)
+		return ErrNoSchema(key, value)
 	}
 
 	return nil
 }
 
-// DeepestRefResult holds the results from DeepestRef analysis
-type DeepestRefResult struct {
-	Ref      spec.Ref
-	Schema   *spec.Schema
-	Warnings []string
-}
-
-// DeepestRef finds the first definition ref, from a cascade of nested refs which are not definitions.
+// deepestRef finds the first definition ref, from a cascade of nested refs which are not definitions.
 //   - if no definition is found, returns the deepest ref.
 //   - pointers to external files are expanded
 //
 // NOTE: all external $ref's are assumed to be already expanded at this stage.
-func DeepestRef(sp *spec.Swagger, opts *spec.ExpandOptions, ref spec.Ref) (*DeepestRefResult, error) {
+func deepestRef(sp *spec.Swagger, opts *spec.ExpandOptions, ref spec.Ref) (*DeepestRefResult, error) {
 	if !ref.HasFragmentOnly {
 		// we found an external $ref, which is odd at this stage:
 		// do nothing on external $refs
@@ -341,8 +337,7 @@ DOWNREF:
 		}
 
 		if _, beenThere := visited[currentRef.String()]; beenThere {
-			return nil,
-				fmt.Errorf("cannot resolve cyclic chain of pointers under %s", currentRef.String())
+			return nil, ErrCyclicalPointer(currentRef.String())
 		}
 
 		visited[currentRef.String()] = true
@@ -384,9 +379,7 @@ DOWNREF:
 
 			err := asSchema.UnmarshalJSON(asJSON)
 			if err != nil {
-				return nil,
-					fmt.Errorf("invalid type for resolved JSON pointer %s. Expected a schema a, got: %T",
-						currentRef.String(), value)
+				return nil, ErrUnhandledType(currentRef.String(), value)
 			}
 			warnings = append(warnings, fmt.Sprintf("found $ref %q (response) interpreted as schema", currentRef.String()))
 
@@ -401,9 +394,7 @@ DOWNREF:
 			asJSON, _ := refable.MarshalJSON()
 			var asSchema spec.Schema
 			if err := asSchema.UnmarshalJSON(asJSON); err != nil {
-				return nil,
-					fmt.Errorf("invalid type for resolved JSON pointer %s. Expected a schema a, got: %T",
-						currentRef.String(), value)
+				return nil, ErrUnhandledType(currentRef.String(), value)
 			}
 
 			warnings = append(warnings, fmt.Sprintf("found $ref %q (parameter) interpreted as schema", currentRef.String()))
@@ -414,9 +405,7 @@ DOWNREF:
 			currentRef = asSchema.Ref
 
 		default:
-			return nil,
-				fmt.Errorf("unhandled type to resolve JSON pointer %s. Expected a Schema, got: %T",
-					currentRef.String(), value)
+			return nil, ErrUnhandledType(currentRef.String(), value)
 		}
 	}
 
@@ -427,7 +416,7 @@ DOWNREF:
 	}
 
 	if sch == nil {
-		return nil, fmt.Errorf("no schema found at %s", currentRef.String())
+		return nil, ErrNoSchema(currentRef.String(), nil)
 	}
 
 	return &DeepestRefResult{Ref: currentRef, Schema: sch, Warnings: warnings}, nil
