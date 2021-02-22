@@ -1,5 +1,7 @@
 module github.com/go-openapi/analysis
 
+replace github.com/go-openapi/spec => /home/ubuntu/thefundschain/poc.1.0.2/src/github.com/go-openapi/spec
+
 require (
 	github.com/go-openapi/jsonpointer v0.23.1
 	github.com/go-openapi/spec v0.22.4
