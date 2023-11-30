@@ -136,11 +136,7 @@ func (p *enumAnalysis) addSchemaEnum(key string, enum []interface{}) {
 	p.addEnum(key, enum)
 }
 
-// New takes a swagger spec object and returns an analyzed spec document.
-// The analyzed document contains a number of indices that make it easier to
-// reason about semantics of a swagger specification for use in code generation
-// or validation etc.
-func New(doc *spec.Swagger) *Spec {
+func newSpec(doc *spec.Swagger) *Spec {
 	a := &Spec{
 		spec:       doc,
 		references: referenceAnalysis{},
@@ -148,7 +144,22 @@ func New(doc *spec.Swagger) *Spec {
 		enums:      enumAnalysis{},
 	}
 	a.reset()
-	a.initialize()
+
+	return a
+}
+
+// New takes a swagger spec object and returns an analyzed spec document.
+// The analyzed document contains a number of indices that make it easier to
+// reason about semantics of a swagger specification for use in code generation
+// or validation etc.
+func New(doc *spec.Swagger) *Spec {
+	newSpec(doc).initialize()
+
+	return a
+}
+
+func newWithOptions(doc *spec.Swagger, options ...analyzeOption) *Spec {
+	newSpec(doc).initialize().initialize(options...)
 
 	return a
 }
@@ -200,7 +211,9 @@ func (s *Spec) reload() {
 	s.initialize()
 }
 
-func (s *Spec) initialize() {
+func (s *Spec) initialize(analyzeOption ...options) {
+	opts := analyzeOptionsApplied(options)
+
 	for _, c := range s.spec.Consumes {
 		s.consumes[c] = struct{}{}
 	}
@@ -254,6 +267,10 @@ func (s *Spec) initialize() {
 	for name := range s.spec.Definitions {
 		schema := s.spec.Definitions[name]
 		s.analyzeSchema(name, &schema, "/definitions")
+	}
+
+	if opts.WithExtensions {
+		// TODO(fred)
 	}
 	// TODO: after analyzing all things and flattening schemas etc
 	// resolve all the collected references to their final representations
