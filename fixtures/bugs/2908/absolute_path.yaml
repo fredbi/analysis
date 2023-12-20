@@ -1,0 +1,12 @@
+paths:
+  applications:
+    get:
+      description: getter
+      responses: 
+        200:
+          description: Ok
+    post:
+      description: setter
+      responses: 
+        200:
+          description: Ok
