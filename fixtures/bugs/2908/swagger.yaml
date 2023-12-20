@@ -1,0 +1,12 @@
+swagger: '2.0'
+info:
+  title: Object
+  version: 0.1.0
+paths:
+  /applications:
+    get:
+      $ref: 'absolute_path.yaml#/paths/applications/get'
+    post:
+      $ref: 'absolute_path.yaml#/paths/applications/post'
+  /applications-works:
+    $ref: 'absolute_path.yaml#/paths/applications'
