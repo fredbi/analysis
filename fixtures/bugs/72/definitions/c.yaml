@@ -1,0 +1,5 @@
+title: c
+type: object
+properties:
+  updatedBy:
+    type: string

@@ -1,0 +1,50 @@
+schemes:
+    - http
+swagger: "2.0"
+info:
+    title: test
+    version: "1.0"
+paths:
+    /a:
+        get:
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        type: array
+                        items:
+                            $ref: '#/definitions/a'
+            operationId: a
+        post:
+            responses:
+                "200":
+                    schema:
+                        $ref: '#/definitions/a'
+                    description: c
+            operationId: b
+definitions:
+    a:
+        allOf:
+            - type: object
+              properties:
+                id:
+                    type: integer
+                segment:
+                    $ref: '#/definitions/b'
+            - $ref: '#/definitions/c'
+        title: a
+    b:
+        title: b
+        allOf:
+            - type: object
+              properties:
+                id:
+                    type: integer
+            - $ref: '#/definitions/c'
+    c:
+        type: object
+        title: c
+        properties:
+            updatedBy:
+                type: string
+

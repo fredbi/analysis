@@ -1,0 +1,7 @@
+title: b
+allOf:
+  - type: object
+    properties:
+      id:
+        type: integer
+  - $ref: ./c.yaml

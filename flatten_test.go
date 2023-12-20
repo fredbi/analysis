@@ -1332,6 +1332,19 @@ func TestFlatten_2334(t *testing.T) {
 	assert.StringContainsT(t, jazon, `"Baz":`)
 }
 
+func TestFlatten_72(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stdout)
+
+	bp := filepath.Join("fixtures", "bugs", "72", "swagger.yaml")
+	sp := antest.LoadOrFail(t, bp)
+	an := New(sp)
+
+	require.NoError(t, Flatten(FlattenOpts{
+		Spec: an, BasePath: bp, Verbose: false,
+	}))
+}
+
 func TestFlatten_1898(t *testing.T) {
 	log.SetOutput(io.Discard)
 	defer log.SetOutput(os.Stdout)
@@ -1366,14 +1379,30 @@ func TestFlatten_RemoveUnused_2657(t *testing.T) {
 	bp := filepath.Join("fixtures", "bugs", "2657", "schema.json")
 	sp := antest.LoadOrFail(t, bp)
 	an := New(sp)
+=======
+		Minimal:      true,
+		Expand:       false,
+		RemoveUnused: false,
+	}))
+
+	sp = antest.LoadOrFail(t, bp)
+	an = New(sp)
+>>>>>>> ce2b7e6 (repo issue #72)
 
 	require.NoError(t, Flatten(FlattenOpts{
 		Spec: an, BasePath: bp, Verbose: true,
 		Minimal:      true,
+<<<<<<< HEAD
 		Expand:       false,
 		RemoveUnused: true,
 	}))
 	require.Empty(t, sp.Definitions)
+=======
+		RemoveUnused: false,
+	}))
+	jazon := antest.AsJSON(t, sp)
+	t.Logf("%v", string(jazon))
+>>>>>>> ce2b7e6 (repo issue #72)
 }
 
 func TestFlatten_Relative_2743(t *testing.T) {

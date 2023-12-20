@@ -1,0 +1,56 @@
+schemes:
+    - http
+swagger: "2.0"
+info:
+    title: test
+    version: "1.0"
+paths:
+    /a:
+        get:
+            operationId: a
+            responses:
+                "200":
+                    description: OK
+                    schema:
+                        type: array
+                        items:
+                            $ref: '#/definitions/a'
+        post:
+            operationId: b
+            responses:
+                "200":
+                    description: c
+                    schema:
+                        $ref: '#/definitions/a'
+definitions:
+    a:
+        title: a
+        allOf:
+            - $ref: '#/definitions/aAllOf0'
+            - $ref: '#/definitions/c'
+    aAllOf0:
+        type: object
+        properties:
+            id:
+                type: integer
+            segment:
+                $ref: '#/definitions/b'
+        x-go-gen-location: models
+    b:
+        allOf:
+            - $ref: '#/definitions/bAllOf0'
+            - $ref: '#/definitions/c'
+        title: b
+    bAllOf0:
+        properties:
+            id:
+                type: integer
+        x-go-gen-location: models
+        type: object
+    c:
+        properties:
+            updatedBy:
+                type: string
+        type: object
+        title: c
+

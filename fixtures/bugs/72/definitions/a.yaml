@@ -1,0 +1,9 @@
+title: a
+allOf:
+  - type: object
+    properties:
+      id:
+        type: integer
+      segment:
+        $ref: ./b.yaml
+  - $ref: ./c.yaml
