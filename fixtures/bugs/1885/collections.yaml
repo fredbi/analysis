@@ -1,0 +1,18 @@
+BaseRequest:
+  type: object
+  discriminator: '@type'
+  properties:
+    '@type':
+       type: string
+WriteRequest:
+  type: object
+  allOf:
+    - $ref: '#/BaseRequest'
+    - properties:
+        test:
+          type: string
+Response:
+  type: object
+  properties:
+    test:
+      type: string

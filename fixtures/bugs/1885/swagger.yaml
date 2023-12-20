@@ -1,0 +1,25 @@
+swagger: '2.0'
+info:
+  version: 0.1.0
+  title: test
+  description: test
+paths:
+  /collections:
+    post:
+      produces:
+        - application/json
+      description: 'test'
+      parameters:
+        - name: serverRequest
+          in: body
+          required: true
+          schema:
+            $ref: 'collections.yaml#/BaseRequest'
+      responses:
+        '200':
+          description: 'test'
+          schema:
+            $ref: 'collections.yaml#/Response'
+definitions:
+  dummy:
+    $ref: 'collections.yaml#/WriteRequest'
