@@ -1393,11 +1393,29 @@ func TestFlatten_RemoveUnused_2657(t *testing.T) {
 
 	require.NoError(t, Flatten(FlattenOpts{
 		Spec: an, BasePath: bp, Verbose: true,
-		Minimal:      true,
 		Expand:       false,
 		RemoveUnused: true,
 	}))
 	require.Empty(t, sp.Definitions)
+}
+
+func TestFlatten_2346(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stdout)
+
+	bp := filepath.Join("fixtures", "bugs", "2346", "swagger.yaml")
+	sp := antest.LoadOrFail(t, bp)
+	an := New(sp)
+
+	require.NoError(t, Flatten(FlattenOpts{
+		Spec: an, BasePath: bp, Verbose: true,
+		Minimal:      true,
+		Expand:       true,
+		RemoveUnused: false,
+	}))
+
+	jazon := antest.AsJSON(t, sp)
+	t.Logf("%s", jazon)
 }
 
 func getDefinition(t testing.TB, sp *spec.Swagger, key string) string {
