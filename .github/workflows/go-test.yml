@@ -10,9 +10,85 @@ on:
   pull_request:
 
 jobs:
+  changes:
+    outputs:
+      notonlydoc: ${{ steps.filter.outputs.notonlydoc }}  # <- true if anything else than doc has been changed
+      doc: ${{ steps.filter.outputs.doc }}                # <- true if any doc has been changed
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
+    steps:
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          notonlydoc:
+          - '**/!(*.md)'                 # <- anything but markdown
+          doc:
+          - added|modified: '**.md'      # <- any markdown
+
+  merge-ok:
+    if: ${{ always() }}
+    name: MergeOK
+    needs: [changes, test_ok, doc_ok]
+    runs-on: ubuntu-latest
+    steps:
+    - run: |
+        # Merge is OK if:
+        # * when changes affect files other than docs (.md files): test job must be OK
+        # * when changes affect doc files: check spelling must be OK
+        #
+        # There may be none, one or both of these triggers.
+        # When none (e.g. _delete_ a markdown file): no specific requirements
+
+        not_doc_only="${{ needs.changes.outputs.notonlydoc }}"
+        doc="${{ needs.changes.outputs.doc }}"
+        merge_ok_doc="${{ needs.doc_ok.outputs.merge_ok }}"
+        merge_ok_test="${{ needs.test_ok.outputs.merge_ok }}"
+
+        if [[ "${not_doc_only}" == "true" && "${merge_ok_test}" != "true" ]] ; then
+          echo "Merge KO. Test suite failed."
+          exit 1
+        fi
+
+        if [[ "${doc}" == "true" && "${merge_ok_doc}" != "true" ]] ; then
+          echo "Merge KO. Doc check failed."
+          exit 1
+        fi
+
+        if [[ "${not_doc_only}" != "true" && "${doc}" != "true" ]] ; then
+          echo "No checks run. Proceed."
+        fi
+
+        echo "Merge OK"
+
+  test_ok:
+    needs: [lint, test]
+    outputs:
+      merge_ok: ${{ steps.set_merge_ok.outputs.merge_ok}}
+    runs-on: ubuntu-latest
+    steps:
+    - id: set_merge_ok
+      run: |
+        echo "merge_ok=true" >> $GITHUB_OUTPUT
+
+  doc_ok:
+    needs: [spelling-check]
+    outputs:
+      merge_ok: ${{ steps.set_merge_ok.outputs.merge_ok}}
+    runs-on: ubuntu-latest
+    steps:
+    - id: set_merge_ok
+      run: |
+        echo "merge_ok=true" >> $GITHUB_OUTPUT
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.notonlydoc == 'true' }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -20,6 +96,7 @@ jobs:
           go-version: stable
           check-latest: true
           cache: true
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
@@ -29,6 +106,8 @@ jobs:
 
   test:
     name: Unit tests
+    needs: [changes]
+    if: ${{ needs.changes.outputs.notonlydoc == 'true' }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -43,10 +122,13 @@ jobs:
         go-version: '${{ matrix.go_version }}'
         check-latest: true
         cache: true
-
     - uses: actions/checkout@v4
-
-    - run: go test -v -race -coverprofile="coverage-${{ matrix.os }}.${{ matrix.go_version }}.out" -covermode=atomic -coverpkg=$(go list)/... ./...
+    - run: >
+        go test -v -race
+        -coverprofile="coverage-${{ matrix.os }}.${{ matrix.go_version }}.out"
+        -covermode=atomic
+        -coverpkg=$(go list)/...
+        ./...
 
     - name: Upload coverage to codecov
       uses: codecov/codecov-action@v4
@@ -56,3 +138,24 @@ jobs:
         os: '${{ matrix.os }}'
         fail_ci_if_error: false
         verbose: true
+
+  spelling-check:
+    name: Doc spelling check
+    if: ${{ needs.changes.outputs.doc == 'true' }}
+    needs: [changes]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: check-spelling/check-spelling@main
+      with:
+        checkout: true
+        config: .github/workflows/spelling
+        #only_check_changed_files: true
+        only_check_changed_files: false
+        extra_dictionaries:
+          cspell:k8s/dict/k8s.txt
+          cspell:software-terms/dict/softwareTerms.txt
+          cspell:npm/dict/npm.txt
+          cspell:filetypes/filetypes.txt
+          cspell:css/dict/css.txt
+          cspell:fullstack/dict/fullstack.txt

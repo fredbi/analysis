@@ -1,0 +1,9 @@
+codecov
+developercertificate
+fka
+github
+gmail
+https
+ivan
+ssh
+ubuntu
