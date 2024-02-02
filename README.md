@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/go-openapi/analysis)](https://goreportcard.com/report/github.com/go-openapi/analysis)
 
 
-A foundational library to analyze an OAI specification document for easier reasoning about the content.
+A foundational library to analyze an OpenAPI 2 (fka Swagger) specification document for easier reasoning about the content.
 
 ## What's inside?
 
@@ -16,6 +16,7 @@ A foundational library to analyze an OAI specification document for easier reaso
 * A spec "fixer" ensuring that response descriptions are non empty
 
 [Documentation](https://pkg.go.dev/github.com/go-openapi/analysis)
+[Contributing](.github/CONTRIBUTING.md)
 
 ## FAQ
 
