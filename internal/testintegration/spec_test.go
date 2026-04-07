@@ -39,7 +39,8 @@ func Test_FlattenAzure(t *testing.T) {
 	require.NoError(t, analysis.Flatten(analysis.FlattenOpts{Spec: analyzed, Expand: true, BasePath: file}))
 
 	jazon := asJSON(t, swagger)
-
+	err = os.WriteFile("flattened-expand-true.json", []byte(jazon), 0660)
+	require.NoError(t, err)
 	assertRefInJSONRegexp(t, jazon, `^(#/definitions/)|(\./example)`)
 
 	t.Run("resolve local $ref azure", func(t *testing.T) {
